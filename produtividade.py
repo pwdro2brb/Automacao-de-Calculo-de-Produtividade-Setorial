@@ -26,10 +26,10 @@ from openpyxl.cell.cell import MergedCell
 from calendar import monthrange
 from datetime import datetime, date
 
-'''
+
 # --- CONFIGURAÇÕES ---
-EMAIL_USER = "pedro.henrsilva@mrv.com.br"
-SENHA_USER = "Felipe22-" 
+EMAIL_USER = " "
+SENHA_USER = " " 
 WAIT_TIME = 10
 
 # --- FUNÇÃO DE APOIO: LOGIN MICROSOFT ---
@@ -232,7 +232,8 @@ finally:
 
 '''
 
-'''#------------------------------------------------------------------------------------------
+'''
+#------------------------------------------------------------------------------------------
 time.sleep(10)
 
 # Definição dos caminhos (ajuste conforme o seu usuário)
@@ -266,7 +267,7 @@ for file_path in top_4_files:
         print(f"Erro ao mover {file_name}: {e}")
 
 # --- FUNÇÕES AUXILIARES GERAIS ---
-'''
+''''''
 def find_column_ignore_case(df, column_name):
     """Encontra o nome real de uma coluna, ignorando maiúsculas/minúsculas."""
     for col in df.columns:
