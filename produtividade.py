@@ -8,6 +8,7 @@ import pandas as pd
 import re
 import shutil
 import unicodedata
+import pyautogui
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -26,10 +27,9 @@ from openpyxl.cell.cell import MergedCell
 from calendar import monthrange
 from datetime import datetime, date
 
-
 # --- CONFIGURAÇÕES ---
-EMAIL_USER = " "
-SENHA_USER = " " 
+EMAIL_USER = " " #sua conta de e-mail
+SENHA_USER = " " #sua senha
 WAIT_TIME = 10
 
 # --- FUNÇÃO DE APOIO: LOGIN MICROSOFT ---
@@ -82,7 +82,7 @@ try:
     driver = webdriver.Chrome()
     driver.maximize_window()
     wait = WebDriverWait(driver, WAIT_TIME)
-    
+
     # ==============================================================================
     # PARTE 1: PODIO
     # ==============================================================================
@@ -224,15 +224,164 @@ try:
     
     print("Relatório Agilis baixado com sucesso!")
     time.sleep(5)
+
+
+    # ==============================================================================
+    # PARTE 3: BÚSSOLA MRV
+    # ==============================================================================
+    
+    print("Passo 1, abrir o site")
+    
+    # Acessa o site normalmente (sem senha na URL)
+    driver.get("http://bussola.mrv.com.br/Main/Big.aspx")
+    
+    print("Aguardando a janela de login do Windows aparecer...")
+    time.sleep(4) # Dá 4 segundos para a janelinha cinza aparecer na tela
+    
+    # O PyAutoGUI vai digitar o email, apertar TAB, digitar a senha e dar ENTER
+    pyautogui.write(EMAIL_USER.strip())
+    pyautogui.press('tab')
+    pyautogui.write(SENHA_USER.strip())
+    pyautogui.press('enter')
+    
+    print("Login enviado via PyAutoGUI!")
+    time.sleep(3) # Espera a página carregar após o login
+
+    # --- PASSO 2: PRÉ-AUTENTICAÇÃO NO DOMÍNIO DO RELATÓRIO ---
+    # Fazemos a mesma coisa para o segundo link
+    driver.get("http://report2.mrv.com.br/ReportServer/Pages/ReportViewer.aspx?/BIG/Administrativo/ADM013%20-%20Relat%C3%B3rio%20Protocolo%20de%20Pagamento%20MRV%20PAG/REL_PRLPGTMRV&rs:Command=Render")
+    
+    time.sleep(4)
+    # Como o Windows costuma salvar a sessão, pode ser que ele nem peça senha de novo.
+    # Mas se pedir, o PyAutoGUI digita novamente:
+    pyautogui.write(EMAIL_USER.strip())
+    pyautogui.press('tab')
+    pyautogui.write(SENHA_USER.strip())
+    pyautogui.press('enter')
+    
+    time.sleep(3)
+    
+    # Volta para o Bússola para continuar o script
+    driver.get("http://bussola.mrv.com.br/Main/Big.aspx")
+
+    # --- PASSO 4: Continue seu script normalmente ---
+    # Agora o navegador já está autenticado em ambos os domínios.
+    # O código para clicar nas pastas e no relatório funcionará sem o pop-up.
+
+    print("Procurando pasta 'Administrativo'...")
+    # Se o login funcionar, essa pasta vai aparecer.
+    pasta_adm = wait.until(EC.element_to_be_clickable((By.ID, "pasta2"))) # Usando o ID que corrigimos antes
+    pasta_adm.click()
+    time.sleep(2)
+
+    print("Selecionando o relatório...")
+    xpath_relatorio = "//div[@id='divLinha' and contains(., 'Relatório Protocolo de Pagamento MRV PAG')]"
+    relatorio_link = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_relatorio)))
+    relatorio_link.click()
+
+    # Agora o relatório deve abrir diretamente, sem pedir login.
+    print("Relatório aberto com sucesso!")
+ 
+    
+    WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > 1)
+
+    # Troca para a nova janela
+    nova_janela = driver.window_handles[-1]  # pega a última janela aberta
+    driver.switch_to.window(nova_janela)
+
+    # Aguarda o elemento estar clicável na nova janela
+    wait = WebDriverWait(driver, 10)
+
+    print("Calculando datas do mês passado...")
+    hoje = date.today()
+    primeiro_dia_mes_atual = hoje.replace(day=1)
+    ultimo_dia_mes_passado = primeiro_dia_mes_atual - timedelta(days=1)
+    primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
+
+    data_inicio_str = primeiro_dia_mes_passado.strftime("%d/%m/%Y")
+    data_final_str = ultimo_dia_mes_passado.strftime("%d/%m/%Y")
+
+    print(f"Datas a preencher: Início {data_inicio_str} | Final {data_final_str}")
+
+    try:
+        # Dá um tempo extra para a página do relatório carregar completamente
+        print("Aguardando os campos do relatório carregarem...")
+        time.sleep(3) 
+
+        # 1. Preencher Data de Início
+        # XPath: Pega o último <input> que aparece ANTES do botão de início
+        xpath_input_inicio = "(//button[@aria-label='Data criação inicio']/preceding::input)[last()]"
+        input_inicio = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_input_inicio)))
+        
+        input_inicio.clear() 
+        input_inicio.send_keys(data_inicio_str)
+        print("Data de início preenchida!")
+
+        # 2. Preencher Data Final
+        # XPath: Pega o último <input> que aparece ANTES do botão de final
+        xpath_input_final = "(//button[@aria-label='Data criação final']/preceding::input)[last()]"
+        input_final = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_input_final)))
+        
+        input_final.clear()
+        input_final.send_keys(data_final_str)
+        print("Data final preenchida!")
+
+        # --- NOVO: Interagir com o Dropdown de Status ---
+        print("Abrindo o menu suspenso...")
+        # 1. Clica na caixa de texto para abrir o menu
+        dropdown_status = wait.until(EC.element_to_be_clickable((By.ID, "ReportViewerControl_ctl04_ctl07_txtValue")))
+        dropdown_status.click()
+        time.sleep(1) # Aguarda a animação do menu descendo
+
+        print("Marcando '(Selecionar Tudo)'...")
+        # 2. Clica no checkbox de Selecionar Tudo
+        checkbox_todos = wait.until(EC.element_to_be_clickable((By.ID, "ReportViewerControl_ctl04_ctl07_divDropDown_ctl00")))
+        checkbox_todos.click()
+        time.sleep(1) # Aguarda o sistema registrar a seleção
+
+        # 3. Clicar em "Exibir Relatório"
+        print("Clicando em Exibir Relatório...")
+        # Usando o ID exato que você mandou no HTML
+        btn_exibir = wait.until(EC.element_to_be_clickable((By.ID, "ReportViewerControl_ctl04_ctl00")))
+        btn_exibir.click()
+        print("Relatório gerando. Aguardando carregamento (isso pode demorar)...")
+
+        # --- NOVO: Aguardar o relatório carregar e Exportar ---
+        
+        # 1. Espera até 120 segundos (2 minutos) para a imagem do relatório aparecer
+        wait_longo = WebDriverWait(driver, 120)
+        imagem_relatorio = wait_longo.until(EC.presence_of_element_located((By.XPATH, "//img[@alt='Imagem do relatório']")))
+        print("Relatório carregado na tela com sucesso!")
+        time.sleep(2) # Pausa rápida de segurança após o carregamento
+
+        # 2. Clicar no botão de Exportar (ícone de disquete/seta para baixo)
+        print("Abrindo menu de exportação...")
+        btn_exportar = wait.until(EC.element_to_be_clickable((By.ID, "ReportViewerControl_ctl05_ctl04_ctl00_ButtonImgDown")))
+
+        btn_exportar.click()
+        time.sleep(1) # Aguarda o menu descer
+
+        # 3. Clicar na opção "Excel"
+        print("Iniciando o download do Excel...")
+        btn_excel = wait.until(EC.element_to_be_clickable((By.XPATH, "//a[@title='Excel' or @alt='Excel']")))
+        btn_excel.click()
+
+        # 4. Aguardar o download concluir
+        # Como ele abre uma nova aba e baixa, vamos dar um tempo generoso para o arquivo cair na pasta Downloads
+        print("Aguardando o download ser concluído (15 segundos)...")
+        time.sleep(15) 
+        
+        print("Download do Bússola finalizado!")
+
+    except Exception as e:
+        print(f"Erro na geração ou exportação do relatório: {e}")
    
 finally:
     print("Script Completo Finalizado.")
     # driver.quit()
     print("Fim.")
 
-'''
 
-'''
 #------------------------------------------------------------------------------------------
 time.sleep(10)
 
@@ -1038,111 +1187,4 @@ if __name__ == "__main__":
     # 3. EXECUTAR O PROCESSO PRINCIPAL
     print("--- Executando Etapa 2: Processar Produtividade ---")
     main()
-
-
-#------------------------------------------------------------------------------------------
-    
-'''
-    # ==============================================================================
-    # PARTE 3: BÚSSOLA MRV
-    # ==============================================================================
-    
-    print("Passo 1, abrir o site")
-
-    # --- PASSO 1: Login no domínio principal (como você já faz) ---
-    usuario_safe = urllib.parse.quote(EMAIL_USER)
-    senha_safe = urllib.parse.quote(SENHA_USER)
-
-    # URL autenticada para o Bússola
-    url_autenticada_bussola = f"http://{usuario_safe}:{senha_safe}@bussola.mrv.com.br/Main/Big.aspx"
-
-    print("Acessando Bússola com credenciais embutidas...")
-    driver.get(url_autenticada_bussola)
-
-    # --- PASSO 2: PRÉ-AUTENTICAÇÃO NO DOMÍNIO DO RELATÓRIO (NOVO) ---
-    print("Pré-autenticando no domínio 'http://report2.mrv.com.br/ReportServer/Pages/ReportViewer.aspx?/BIG/Administrativo/ADM013%20-%20Relat%C3%B3rio%20Protocolo%20de%20Pagamento%20MRV%20PAG/REL_PRLPGTMRV&rs:Command=Render'...")
-
-    # Monta uma URL base para o domínio do relatório com as credenciais
-    url_autenticada_report = f"http://{usuario_safe}:{senha_safe}@report2.mrv.com.br/ReportServer/Pages/ReportViewer.aspx?/BIG/Administrativo/ADM013%20-%20Relat%C3%B3rio%20Protocolo%20de%20Pagamento%20MRV%20PAG/REL_PRLPGTMRV&rs:Command=Render"
-
-    # Visita a URL base. O navegador vai processar e guardar as credenciais para este domínio.
-    # A página pode dar erro ou ficar em branco, não importa. O objetivo é apenas enviar as credenciais.
-    driver.get(url_autenticada_report)
-
-    # --- PASSO 3: Volte para o Bússola para continuar a navegação ---
-    print("Retornando ao Bússola para continuar a automação...")
-    driver.get(url_autenticada_bussola) # Ou use driver.back() se a página anterior for a correta
-
-    # --- PASSO 4: Continue seu script normalmente ---
-    # Agora o navegador já está autenticado em ambos os domínios.
-    # O código para clicar nas pastas e no relatório funcionará sem o pop-up.
-
-    print("Procurando pasta 'Administrativo'...")
-    # Se o login funcionar, essa pasta vai aparecer.
-    pasta_adm = wait.until(EC.element_to_be_clickable((By.ID, "pasta2"))) # Usando o ID que corrigimos antes
-    pasta_adm.click()
-    time.sleep(2)
-
-    print("Selecionando o relatório...")
-    xpath_relatorio = "//div[@id='divLinha' and contains(., 'Relatório Protocolo de Pagamento MRV PAG')]"
-    relatorio_link = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_relatorio)))
-    relatorio_link.click()
-
-    # Agora o relatório deve abrir diretamente, sem pedir login.
-    print("Relatório aberto com sucesso!")
- 
-    
-    WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > 1)
-
-    # Troca para a nova janela
-    nova_janela = driver.window_handles[-1]  # pega a última janela aberta
-    driver.switch_to.window(nova_janela)
-
-    # Aguarda o elemento estar clicável na nova janela
-    wait = WebDriverWait(driver, 10)
-
-    try:
-        # Aguarda até que o elemento esteja presente e clicável
-        wait = WebDriverWait(driver, 10)
-        elemento = wait.until(EC.element_to_be_clickable((By.ID, "ReportViewerControl_ctl04_ctl03_ctl01")))
-
-        # Clica no elemento
-        elemento.click()
-        print("Elemento clicado com sucesso!")
-
-    except Exception as e:
-        print(f"Ocorreu um erro: {e}")
-
-    wait = WebDriverWait(driver, 10)
-
-    # Seleciona TODOS os botões "Mês Anterior" pelo atributo ALT do <img>
-    botoes = driver.find_elements(By.XPATH, '//a[@accesskey="<"]')
-
-    print("Foram encontrados:", len(botoes), "botões")
-
-    clicou = False
-
-    for botao in botoes:
-        try:
-            # só clica no que está visível (o calendário aberto)
-            if botao.is_displayed():
-                driver.execute_script("arguments[0].click();", botao)
-                print("Clique realizado no botão correto!")
-                clicou = True
-                break
-        except:
-            pass
-
-    if not clicou:
-        print("Nenhum botão visível encontrado.")
-
-
-    # Opcional: Fechar a janela do relatório e voltar para a principal
-    # driver.close()
-    # driver.switch_to.window(janela_bussola)
-    time.sleep(3)
-except Exception as e:
-    print(f"\nCRITICAL ERROR NA PARTE 3 (BÚSSOLA): {e}")
-    driver.save_screenshot("erro_bussola.png")
-  '''  
 
