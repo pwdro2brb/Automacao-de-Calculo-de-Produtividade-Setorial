@@ -25,7 +25,9 @@ from openpyxl import load_workbook
 from urllib.parse import quote as url_quote
 from openpyxl.cell.cell import MergedCell
 from calendar import monthrange
-from datetime import datetime, date
+import pyperclip
+import subprocess
+from PIL import Image
 
 # --- CONFIGURAÇÕES ---
 EMAIL_USER = " " #sua conta de e-mail
@@ -76,6 +78,7 @@ def fazer_login_microsoft(driver, wait, email, senha):
     except Exception as e:
         print(f"Erro no Login Microsoft: {e}")
         return False
+
 
 # --- INÍCIO DO SCRIPT ---
 try:
@@ -382,7 +385,249 @@ finally:
     print("Fim.")
 
 
+
+# ============================================================
+# PARTE 2: TRANSAÇÃO MIR5
+# ============================================================
+
+try:
+    # ============================================================
+    # FUNÇÃO PARA TRAZER O SAP PARA FRENTE
+    # ============================================================
+
+
+    def clicar_chekbox(posicao, espera=0.1):
+        """Clica em uma posição e aguarda."""
+        pyautogui.click(x=posicao[0], y=posicao[1])
+        time.sleep(espera)
+
+    def focar_janela_sap():
+        """Traz a janela do SAP para frente usando PowerShell."""
+        # Tenta vários nomes possíveis da janela do SAP
+        nomes = [
+            "SAP Easy Access",
+            "Cockpit NF",
+            "SAP",
+        ]
+        for nome in nomes:
+            try:
+                cmd = f'powershell -command "(New-Object -ComObject WScript.Shell).AppActivate(\'{nome}\')"'
+                resultado = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                if "True" in resultado.stdout or resultado.returncode == 0:
+                    print(f"✅ Janela '{nome}' focada!")
+                    time.sleep(0.5)
+                    return True
+            except:
+                pass
+        
+        print("⚠️ Não conseguiu focar automaticamente.")
+        print("   Clique na janela do SAP! Você tem 3 segundos...")
+        time.sleep(3)
+        return False
+
+    # ============================================================
+    # ALTERNATIVA: Usar pygetwindow para focar a janela
+    # ============================================================
+
+    def focar_janela_sap_v2():
+        """Traz a janela do SAP para frente usando pygetwindow."""
+        try:
+            import pygetwindow as gw
+            
+            # Lista todas as janelas com "SAP" no título
+            janelas = gw.getWindowsWithTitle('SAP')
+            
+            if janelas:
+                janela_sap = janelas[0]
+                janela_sap.activate()
+                time.sleep(0.5)
+                print(f"✅ Janela focada: {janela_sap.title}")
+                return True
+            else:
+                print("❌ Nenhuma janela SAP encontrada!")
+                return False
+        except ImportError:
+            print("pygetwindow não instalado. Use: pip install pygetwindow")
+            return False
+        
+    CAMPO_COMANDO = (3050, 77)
+
+    def arrastar_scrollbar_lateral(posicao, distancia_x=310):
+        """Arrasta a barra de rolagem lateral (horizontal) para a direita."""
+        pyautogui.moveTo(x=posicao[0], y=posicao[1])
+        time.sleep(0.2)
+        pyautogui.drag(distancia_x, 0, duration=1.0)  # ← drag no eixo X, não Y
+        time.sleep(0.1)
+
+    def arrastar_scrollbar_lateral_voltar(posicao, distancia_x=210):
+        """Arrasta a barra de rolagem lateral (horizontal) para a esquerda."""
+        pyautogui.moveTo(x=posicao[0], y=posicao[1])
+        time.sleep(0.2)
+        pyautogui.drag(-distancia_x, 0, duration=1.0)  # ← drag no eixo X negativo para a esquerda
+        time.sleep(0.2)
+
+    def focar_sap():
+        """Traz a janela do SAP para frente."""
+        nomes = ["SAP Easy Access", "Cockpit NF", "SAP"]
+        for nome in nomes:
+            try:
+                cmd = f'powershell -command "(New-Object -ComObject WScript.Shell).AppActivate(\'{nome}\')"'
+                subprocess.run(cmd, shell=True, capture_output=True)
+                time.sleep(0.5)
+                return
+            except:
+                pass
+
+    def clicar_e_digitar(posicao, texto):
+        """Clica em uma posição e digita o texto via clipboard."""
+        pyautogui.click(x=posicao[0], y=posicao[1])
+        time.sleep(0.3)
+        pyautogui.hotkey('ctrl', 'a')
+        pyautogui.press('delete')
+        time.sleep(0.3)
+        pyperclip.copy(texto)
+        pyautogui.hotkey('ctrl', 'v')
+        time.sleep(0.1)
+
+    def clicar(posicao, espera=0.3):
+        """Clica em uma posição e aguarda."""
+        pyautogui.click(x=posicao[0], y=posicao[1])
+        time.sleep(espera)
+
+    def arrastar_scrollbar(posicao, distancia_y=500):
+        """Arrasta a barra de rolagem para baixo."""
+        pyautogui.moveTo(x=posicao[0], y=posicao[1])
+        time.sleep(0.3)
+        pyautogui.drag(0, distancia_y, duration=1.0)
+        time.sleep(0.3)
+
+    # ============================================================
+    # INÍCIO DO PROCESSO
+    # ============================================================
+    print("=" * 50)
+    print("  AUTOMAÇÃO MIR5 - INICIANDO")
+    print("=" * 50)
+    print()
+
+
+    # ============================================================
+    # PASSO 0: FOCAR NA JANELA DO SAP (MONITOR CORRETO)
+    # ============================================================
+    print("PASSO 0: Focando na janela do SAP...")
+    focar_sap()
+
+    # Também move o mouse para o monitor do SAP para garantir
+    pyautogui.moveTo(x=CAMPO_COMANDO[0], y=CAMPO_COMANDO[1])
+    time.sleep(0.5)
+    print("✅ Foco no SAP!")
+
+    print("\n" + "=" * 50)
+    print("  INICIANDO TRANSAÇÃO MIR5")
+    print("=" * 50)
+
+    # --- COORDENADAS MIR5 ---
+    MIR5_BOTAO_MULTIPLO_USER = (3941, 300)
+    MIR5_USER_1 = (3044, 418)
+    MIR5_USER_2 = (3065, 452)
+    MIR5_USER_3 = (3116, 485)
+
+    MIR5_DATA_BTN_1 = (3940, 477)
+    MIR5_DATA_BTN_2 = (3354, 315)
+    MIR5_INPUT_DATA_INICIO = (3056, 419)
+    MIR5_INPUT_DATA_FIM = (3206, 422)
+
+    MIR5_MENU_1 = (2958, 31)
+    MIR5_MENU_2 = (3032, 136)
+    MIR5_MENU_3 = (3354, 173)
+    MIR5_MENU_4 = (3747, 474)
+
+    MIR5_POPUP_SAP_1 = (3107, 537)
+    MIR5_POPUP_SAP_2 = (3120, 428)
+
+    # PASSO 32: Abrir transação MIR5
+    print("\nPASSO 32: Abrindo transação MIR5...")
+    focar_sap()
+    clicar(CAMPO_COMANDO)
+    pyautogui.hotkey('ctrl', 'a')
+    pyautogui.press('delete')
+    time.sleep(0.1)
+    pyperclip.copy('/nMIR5')
+    pyautogui.hotkey('ctrl', 'v')
+    time.sleep(0.1)
+    pyautogui.press('enter')
+    time.sleep(3) # Aguarda a tela da MIR5 carregar
+
+    # PASSO 33: Preencher Usuários
+    print("\nPASSO 33: Preenchendo usuários...")
+    clicar(MIR5_BOTAO_MULTIPLO_USER, espera=1)
+    clicar_e_digitar(MIR5_USER_1, 'MS0069532')
+    clicar_e_digitar(MIR5_USER_2, 'MS0073814')
+    clicar_e_digitar(MIR5_USER_3, 'MS0075116')
+    pyautogui.press('f8') # Confirma a seleção múltipla
+    time.sleep(1)
+    print("✅ Usuários preenchidos!")
+
+    # PASSO 34: Calcular datas do mês passado
+    print("\nPASSO 34: Calculando e preenchendo datas...")
+    hoje = date.today()
+    primeiro_dia_mes_atual = hoje.replace(day=1)
+    ultimo_dia_mes_passado = primeiro_dia_mes_atual - timedelta(days=1)
+    primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
+
+    # Formata com pontos (ex: 01.06.2026)
+    data_inicio_str = primeiro_dia_mes_passado.strftime("%d.%m.%Y")
+    data_fim_str = ultimo_dia_mes_passado.strftime("%d.%m.%Y")
+
+    # Clica nos botões para abrir a seleção de data
+    clicar(MIR5_DATA_BTN_1, espera=1)
+    clicar(MIR5_DATA_BTN_2, espera=1)
+
+    # Preenche as datas
+    clicar_e_digitar(MIR5_INPUT_DATA_INICIO, data_inicio_str)
+    clicar_e_digitar(MIR5_INPUT_DATA_FIM, data_fim_str)
+    print(f"✅ Datas preenchidas: {data_inicio_str} até {data_fim_str}")
+
+    pyautogui.press('f8') # Confirma a seleção de datas
+    time.sleep(1)
+
+    # PASSO 35: Executar o relatório principal
+    print("\nPASSO 35: Executando relatório MIR5...")
+    pyautogui.press('f8')
+    time.sleep(7) # Tempo maior para o SAP processar e carregar a tabela
+    print("✅ Relatório carregado!")
+
+    # PASSO 36: Navegar no menu para exportar
+    print("\nPASSO 36: Exportando relatório...")
+    clicar(MIR5_MENU_1, espera=0.5)
+    clicar(MIR5_MENU_2, espera=0.5)
+    clicar(MIR5_MENU_3, espera=0.5)
+    clicar(MIR5_MENU_4, espera=1.5) # Espera a janela do Windows aparecer
+
+    # PASSO 37: Salvar no popup do Windows
+    print("\nPASSO 37: Confirmando salvamento no Windows...")
+    pyautogui.press('enter') # Aperta Enter no botão "Salvar" do Windows
+    time.sleep(2)
+
+    # PASSO 38: Confirmar popups finais do SAP
+    print("\nPASSO 38: Confirmando popups do SAP...")
+    clicar(MIR5_POPUP_SAP_1, espera=1)
+    clicar(MIR5_POPUP_SAP_2, espera=1)
+
+    # PASSO 39: Fechar o Excel
+    print("\nPASSO 39: Aguardando Excel abrir para fechar...")
+    time.sleep(8) # Tempo generoso para o Excel abrir completamente na tela
+    pyautogui.hotkey('alt', 'f4') # Comando universal do Windows para fechar a janela atual
+    print("✅ Excel fechado!")
+
+    print("\n" + "=" * 50)
+    print("  🎉 AUTOMAÇÃO MIR5 FINALIZADA COM SUCESSO!")
+    print("=" * 50)
+
+except Exception as e:
+    print(f"❌ ERRO durante a automação MIR5: {e}")
+
 #------------------------------------------------------------------------------------------
+
 time.sleep(10)
 
 # Definição dos caminhos (ajuste conforme o seu usuário)
@@ -509,12 +754,12 @@ def step_1_prepare_and_rename_reports(diretorio):
 
 # Arquivos e abas
 
-PROD_PATH    = "Produtividade 05 - 2026 (preenchido).xlsx"      # aba Plan1
+PROD_PATH    = "Produtividade 06 - 2026 (preenchido).xlsx"      # aba Plan1
 AGILIS_PATH  = "Relatório - Agilis.xlsx"           # aba TabelaDinamica
 SEDEX_PATH   = "Relatório - Sedex.Malote.xlsx"     # aba TabelaDinamica
 LANCTOS_PATH = "Relatório - Lançamentos.xlsx"      # aba TabelaDinamica (Respons. Entrega)
 SAP_PATH     = "Relatório - SAP.xlsx"              # aba TabelaDinamica (Nome do usuário)
-OUT_PATH     = "Produtividade 06 - 2026 (preenchido).xlsx"
+OUT_PATH     = "Produtividade 07 - 2026 (preenchido).xlsx"
 
 # ===================== MAPEAMENTOS =====================
 # Sedex: nome na pivot -> texto exato da coluna B na produtividade
